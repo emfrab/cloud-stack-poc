@@ -12,22 +12,24 @@ The webserver itself is a docker container with nginx that responds with "world"
 
 ## Prerequisites
 
-- Copy the included SSH key into the `.ssh` folder:
-  ```bash
-  cp key-test-hello-webserver ~/.ssh/
-  ```
-  
-  Change permissions if necessary:
-  ```bash
-  chown $(whoami) ~/.ssh/key-test-hello-webserver && chmod 0600 ~/.ssh/key-test-hello-webserver
-  ```
-
 - Install python and pip: https://www.python.org/downloads/
 
 - Install python libraries:
-  ```bash
-  pip install -r requirements.txt
-  ```
+    ```
+    pip install -r requirements.txt
+    ```
+
+- Run [`generate_ssh_key.py`](./generate_ssh_key.py) script to generate SSH key pair and process [`cloudformation/hello-webserver-stack.yml.j2`](./cloudformation/hello-webserver-stack.yml.j2) template:
+
+    ```
+    python generate_ssh_key.py
+    ```
+
+- Copy AWS credentials template, rename to `aws_credentials.json` and replace placeholders with actual secrets:
+
+    ```
+    cp ./.credentials/aws_credentials.json.template ./.credentials/aws_credentials.json
+    ```
 
 ## Bootstrapping
 
