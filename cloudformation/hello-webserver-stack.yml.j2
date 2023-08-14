@@ -90,7 +90,7 @@ Resources:
     Type: AWS::EC2::KeyPair
     Properties:
       KeyName: key-test-hello-webserver
-      PublicKeyMaterial: "pubkey"
+      PublicKeyMaterial: "{{ pub_key }}"
 ### Elastic IP
   HelloWebserverEIP:
     Type: AWS::EC2::EIP
