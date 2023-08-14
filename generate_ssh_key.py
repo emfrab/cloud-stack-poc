@@ -56,10 +56,10 @@ def process_jinja_template(path: str, output: str = None, **kwargs) -> str:
 if __name__ == "__main__":
     key_name = "hello-webserver-key"
 
-    _, pub_key_path = generate_ssh_key(key_name)
+    _, public_key_path = generate_ssh_key(key_name)
 
     template_path = Path(SCRIPT_DIR, "cloudformation", "hello-webserver-stack.yml.j2").as_posix()
     output_path = template_path.removesuffix(".j2")
 
-    with open(pub_key_path, "r") as pub_key:
-        process_jinja_template(path=template_path, output=output_path, pub_key=pub_key.read())
+    with open(public_key_path, "r") as pub_key:
+        process_jinja_template(path=template_path, output=output_path, pub_key=public_key_path.read())
