@@ -1,0 +1,8 @@
+---
+- hosts: webserver
+  become: yes
+  tasks:
+    - name: Deploy webserver
+      include_role:
+        name: hello-webserver
+        tasks_from: deploy-webserver  # Only execute deploy-webserver taskfile

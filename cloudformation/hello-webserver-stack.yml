@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+### VPC
+  HelloWebserverVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      Tags:
+        - Key: Name
+          Value: vpc-test-hellowebserver
+      CidrBlock: 10.0.0.0/16
+### Subnets
+  HelloWebserverNwIf:
+    Type: AWS::EC2::Subnet
+    Properties:
+      Tags:
+        - Key: Name
+          Value: nw-test-hello-webserver-if
+      CidrBlock: 10.0.0.0/24
+      VpcId: !Ref HelloWebserverVpc
+  HelloWebserverNwNif:
+    Type: AWS::EC2::Subnet
+    Properties:
+      Tags:
+        - Key: Name
+          Value: nw-test-hello-webserver-nif
+      VpcId: !Ref HelloWebserverVpc
+      CidrBlock: 10.0.1.0/24
+### Route tables
+  HelloWebserverRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref HelloWebserverVpc
+  HelloWebserverRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref HelloWebserverRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  HelloWebserverRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref HelloWebserverNwIf
+      RouteTableId: !Ref HelloWebserverRouteTable
+### Instances
+  HelloWebserverEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0b7fd829e7758b06d  # Amazon Linux
+      InstanceType: t2.micro
+      KeyName: !Ref HelloWebserverKey
+      SecurityGroupIds:
+        - !Ref HelloWebserverSg
+      SubnetId: !Ref HelloWebserverNwIf
+      Tags:
+        - Key: Name
+          Value: srv-test-hello-webserver
+    DependsOn:
+      - HelloWebserverVpcIgAttachment
+      - HelloWebserverRouteTableAssociation
+### Security groups
+  HelloWebserverSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for hello-webserver service on test environment
+      Tags:
+        - Key: Name
+          Value: sg-test-hello-webserver
+      VpcId: !Ref HelloWebserverVpc
+      SecurityGroupIngress:
+        - Description: Allow SSH from anywhere
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - Description: Allow HTTP from VPC
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !GetAtt HelloWebserverVpc.CidrBlock
+### Internet gateways
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  HelloWebserverVpcIgAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref HelloWebserverVpc
+      InternetGatewayId: !Ref InternetGateway
+### Key pairs
+  HelloWebserverKey:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: key-test-hello-webserver
+      PublicKeyMaterial: "pubkey"
+### Elastic IP
+  HelloWebserverEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  HelloWebserverEIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref HelloWebserverEC2
+      AllocationId: !GetAtt HelloWebserverEIP.AllocationId
+### ELB
+  HelloWebserverNLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn:
+      - HelloWebserverNwNif
+    Properties:
+      Name: nlb-test-hello-webserver
+      Scheme: internal
+      Subnets:
+        - !Ref HelloWebserverNwNif
+      Type: network
+  HelloWebserverNLBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref HelloWebserverVpc
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: TCP
+      TargetType: instance
+      Targets:
+        - Id: !Ref HelloWebserverEC2
+  HelloWebserverNLBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref HelloWebserverNLBTargetGroup
+      LoadBalancerArn: !Ref HelloWebserverNLB
+      Port: 80
+      Protocol: TCP
+### API Gateway
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    DependsOn:
+      - HelloWebserverEC2
+      - VpcLinkApi
+    Properties:
+      Name: api-test-hello-webserver
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: hello
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: HTTP_PROXY
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VpcLinkApi
+        IntegrationHttpMethod: GET
+        Uri: !Sub http://${HelloWebserverEC2.PrivateIp}/hello
+        PassthroughBehavior: WHEN_NO_MATCH
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: ""
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+      - StatusCode: 200
+        ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Origin: true
+  VpcLinkApi:
+    Type: AWS::ApiGateway::VpcLink
+    DependsOn:
+      - HelloWebserverNLB
+    Properties:
+      Name: api-vpc-link-hello-webserver
+      TargetArns:
+        - !Ref HelloWebserverNLB
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: test
+  ApiGatewayResponse:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      ResponseTemplates:
+        text/plain : "Not found"
+      ResponseType: DEFAULT_4XX
+      RestApiId: !Ref ApiGatewayRestApi
+      StatusCode: "404"

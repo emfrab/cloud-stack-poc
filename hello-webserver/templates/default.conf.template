@@ -1,0 +1,12 @@
+server {
+    listen 11888;
+    server_name $SERVER_NAME;
+
+    # Set the default Content-Type header for all responses
+    default_type text/plain;
+
+    location /hello {
+        add_header Content-Type text/plain;
+        return 200 "$APPENV\n";
+    }
+}

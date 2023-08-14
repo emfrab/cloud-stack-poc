@@ -1,0 +1,14 @@
+---
+- name: Install packages
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - docker
+    # More can be added if needed
+
+- name: Enable and start docker service
+  systemd:
+    name: docker
+    enabled: yes
+    state: started

@@ -1,0 +1,24 @@
+---
+- name: Copy image directory
+  copy:
+    src: "{{ hello_webserver_root | default('./hello-webserver')}}"
+    dest: /etc/docker
+    mode: 0400
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  register: copy_image_dir
+
+- name: Build image
+  shell: docker build -t hello-webserver .
+  args:
+    chdir: /etc/docker/hello-webserver
+  when: copy_image_dir.changed
+
+- name: Stop and delete container
+  shell: docker stop hello-webserver && docker container rm hello-webserver
+  ignore_errors: true  # The container might not exist, case when deploying for the first time
+  when: copy_image_dir.changed
+
+- name: Run container
+  shell: docker run -d --restart always --name hello-webserver -p 80:11888 -e SERVER_NAME={{ inventory_hostname }} hello-webserver
+  when: copy_image_dir.changed
